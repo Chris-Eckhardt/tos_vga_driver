@@ -369,7 +369,7 @@ void draw_px (int x, int y, int color)
 
 int clip_check (int x, int y, window * wnd)
 {
-		if (x < 0)
+	if (x < 0)
 		return 0;
 
 	if (x >= wnd->width)
@@ -378,7 +378,7 @@ int clip_check (int x, int y, window * wnd)
 	if (y < 0)
 		return 0;
 
-	if (y >= wnd->width)
+	if (y >= wnd->height)
 		return 0;
 
 	return 1;
