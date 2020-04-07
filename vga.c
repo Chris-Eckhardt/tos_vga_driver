@@ -40,7 +40,7 @@
 #define WHITE 0x3F
 
 /*****************************************************************************
-8X8 AND 8X16 FONTS
+*                               8X8 FONT                                     *
 *****************************************************************************/
 static unsigned char g_8x8_font[2048] =
 {
@@ -312,6 +312,10 @@ typedef struct {
 	int y;
 	int width;
 	int height;
+	int frame_x;
+	int frame_y;
+	int frame_width;
+	int frame_height;
 	unsigned int window_id;
 } window;
 
@@ -326,9 +330,9 @@ void clear_screen ();
 void fill_screen (int color);
 void fill_rect (int x, int y, int width, int height, int color);
 void draw_px (int x, int y, int color);
-int clip_check (int x, int y, window * wnd);
-void draw_string (window * wnd, int x, int y, int bg_color, int fg_color, const char * str);
-void draw_character (window * wnd, int x, int y, int bg_color, int fg_color, char c);
+int clip_check (int x, int y, window * wnd, int in_bounds);
+void draw_string (window * wnd, int x, int y, int bg_color, int fg_color, const char * str, int in_bounds);
+void draw_character (window * wnd, int x, int y, int bg_color, int fg_color, char c, int in_bounds);
 int m_sgn (int x);
 int m_abs (int a);
 
@@ -348,7 +352,7 @@ void draw_pixel (VGA_WINDOW_MSG * msg)
 	window * wnd = &windows[params->window_id];
 
 	/* draw pixel */
-	if (clip_check(params->x, params->y, wnd))
+	if (clip_check(params->x, params->y, wnd, 1))
 		draw_px(
 			wnd->x + params->x, 
 			wnd->y + params->y, 
@@ -410,15 +414,20 @@ void create_window (VGA_WINDOW_MSG * msg)
 	fill_rect(frame_x, frame_y, frame_w, frame_h, WHITE);
 	fill_rect(params->x, params->y, params->width, params->height, BLACK);
 
-	/* write title on frame */
-
 	/* add to window array */
 	window * new_window = &windows[params->window_id];
 	new_window->x = params->x;
 	new_window->y = params->y;
 	new_window->width = params->width;
 	new_window->height = params->height;
+	new_window->frame_y = frame_y;
+	new_window->frame_x = frame_x;
+	new_window->frame_height = frame_h;
+	new_window->frame_width = frame_w;
 	new_window->window_id = params->window_id;
+
+	/* write title on frame */
+	draw_string(new_window, (frame_w/2)-((k_strlen(params->title)/2)*8), 2, WHITE, BLACK, params->title, 0);
 }
 
 /*************************************************
@@ -433,7 +442,7 @@ void draw_text (VGA_WINDOW_MSG * msg)
 	window * wnd = &windows[params->window_id];
 
 	/* print string */
-	draw_string(wnd, params->x, params->y, params->bg_color, params->fg_color, params->text);
+	draw_string(wnd, params->x, params->y, params->bg_color, params->fg_color, params->text, 1);
 }
 
 /*************************************************
@@ -471,7 +480,7 @@ void draw_line (VGA_WINDOW_MSG * msg)
 			xe = params->x0;
 		}
 
-		if (clip_check(x, y, wnd))
+		if (clip_check(x, y, wnd, 1))
 			draw_px(wnd->x+x, wnd->y+y, params->color);
 
 		for (i = 0; x < xe; i++) {
@@ -488,7 +497,7 @@ void draw_line (VGA_WINDOW_MSG * msg)
 				px = px + 2 * (dy1 - dx1);
 			}
 
-			if (clip_check(x, y, wnd))
+			if (clip_check(x, y, wnd, 1))
 				draw_px(wnd->x+x, wnd->y+y, params->color);
 		}
 
@@ -504,7 +513,7 @@ void draw_line (VGA_WINDOW_MSG * msg)
 			ye = params->y0;
 		}
 
-		if (clip_check(x, y, wnd))
+		if (clip_check(x, y, wnd, 1))
 			draw_px(wnd->x+x, wnd->y+y, params->color);
 
 		for (i = 0; y < ye; i++) {
@@ -521,7 +530,7 @@ void draw_line (VGA_WINDOW_MSG * msg)
 				py = py + 2 * (dx1 - dy1);
 			}
 
-			if (clip_check(x, y, wnd))
+			if (clip_check(x, y, wnd, 1))
 				draw_px(wnd->x+x, wnd->y+y, params->color);
 		}
 
@@ -694,103 +703,76 @@ void draw_px (int x, int y, int color)
 	poke_b( (VIDEO_BASE_ADDRESS + y * SCREEN_WIDTH + x), color);
 }
 
-int clip_check (int x, int y, window * wnd)
+int clip_check (int x, int y, window * wnd, int in_bounds)
 {
-	if (x < 0)
-		return 0;
+	if (in_bounds) {
+		if (x < 0)
+			return 0;
 
-	if (x >= wnd->width)
-		return 0;
+		if (x >= wnd->width)
+			return 0;
 
-	if (y < 0)
-		return 0;
+		if (y < 0)
+			return 0;
 
-	if (y >= wnd->height)
-		return 0;
+		if (y >= wnd->height)
+			return 0;
 
-	return 1;
+		return 1;
+	} else {
+		if (x < 0)
+			return 0;
+
+		if (x >= wnd->frame_width)
+			return 0;
+
+		if (y < 0)
+			return 0;
+
+		if (y >= wnd->frame_height)
+			return 0;
+
+		return 1;
+	}
 }
 
-void draw_string (window * wnd, int x, int y, int bg_color, int fg_color, const char * str) {
+void draw_string (window * wnd, int x, int y, int bg_color, int fg_color, const char * str, int in_bounds) {
 
 	while (*(str) != '\0') {
-		draw_character(wnd, x, y, bg_color, fg_color, *(str));
+		draw_character(wnd, x, y, bg_color, fg_color, *(str), in_bounds);
 		str++;
 		x+=8;
 	}
 }
 
-void draw_character (window * wnd, int x, int y, int bg_color, int fg_color, char c) {
+void draw_character (window * wnd, int x, int y, int bg_color, int fg_color, char c, int in_bounds) {
 
-	int i;
+	int i, n;
+	int lim = 8;
 	unsigned char b;
 
-	for (i = 0; i < 8; i++) {
+	for (i = 0; i < lim; i++) {
 
-		b = g_8x8_font[(((int)c)*8)+i];
+		b = g_8x8_font[(((int)c)*lim)+i];
 
-		if ((b>>0&1) == 0) {
-			if (clip_check(x+7, y+1, wnd))
-			draw_px(wnd->x+x+7, wnd->y+y+i, bg_color);
-		} else {
-			if (clip_check(x+7, y+i, wnd))
-			draw_px(wnd->x+x+7, wnd->y+y+i, fg_color);
-		}
-
-		if ((b>>1&1) == 0) {
-			if (clip_check(x+6, y+i, wnd))
-			draw_px(wnd->x+x+6, wnd->y+y+i, bg_color);
-		} else {
-			if (clip_check(x+6, y+i, wnd))
-			draw_px(wnd->x+x+6, wnd->y+y+i, fg_color);
-		}
-
-		if ((b>>2&1) == 0) {
-			if (clip_check(x+5, y+i, wnd))
-			draw_px(wnd->x+x+5, wnd->y+y+i, bg_color);
-		} else {
-			if (clip_check(x+5, y+i, wnd))
-			draw_px(wnd->x+x+5, wnd->y+y+i, fg_color);
-		}
-		
-		if ((b>>3&1) == 0) {
-			if (clip_check(x+4, y+i, wnd))
-			draw_px(wnd->x+x+4, wnd->y+y+i, bg_color);
-		} else {
-			if (clip_check(x+4, y+i, wnd))
-			draw_px(wnd->x+x+4, wnd->y+y+i, fg_color);
-		}
-
-		if ((b>>4 &1) == 0) {
-			if (clip_check(x+3, y+i, wnd))
-			draw_px(wnd->x+x+3, wnd->y+y+i, bg_color);
-		} else {
-			if (clip_check(x+3, y+i, wnd))
-			draw_px(wnd->x+x+3, wnd->y+y+i, fg_color);
-		}
-
-		if ((b>>5 &1) == 0) {
-			if (clip_check(x+2, y+i, wnd))
-			draw_px(wnd->x+x+2, wnd->y+y+i, bg_color);
-		} else {
-			if (clip_check(x+2, y+i, wnd))
-			draw_px(wnd->x+x+2, wnd->y+y+i, fg_color);
-		}
-
-		if ((b >> 6 & 1) == 0) {
-			if (clip_check(x+1, y+i, wnd))
-			draw_px(wnd->x+x+1, wnd->y+y+i, bg_color);
-		} else {
-			if (clip_check(x+1, y+i, wnd))
-			draw_px(wnd->x+x+1, wnd->y+y+i, fg_color);
-		}
-
-		if ((b >> 7 & 1) == 0) {
-			if (clip_check(x, y+i, wnd))
-			draw_px(wnd->x+x, wnd->y+y+i, bg_color);
-		} else {
-			if (clip_check(x, y+i, wnd))
-			draw_px(wnd->x+x, wnd->y+y+i, fg_color);
+		for (n = 0; n < lim; n++) {
+			if (in_bounds) {
+				if ((b>>n&1) == 0) {
+					if (clip_check(x+lim-n-1, y+i, wnd, in_bounds))
+					draw_px(wnd->x+x+lim-n-1, wnd->y+y+i, bg_color);
+				} else {
+					if (clip_check(x+lim-n-1, y+i, wnd, in_bounds))
+					draw_px(wnd->x+x+lim-n-1, wnd->y+y+i, fg_color);
+				}
+			} else {
+				if ((b>>n&1) == 0) {
+					if (clip_check(x+lim-n-1, y+i, wnd, in_bounds))
+					draw_px(wnd->frame_x+x+lim-n-1, wnd->frame_y+y+i, bg_color);
+				} else {
+					if (clip_check(x+lim-n-1, y+i, wnd, in_bounds))
+					draw_px(wnd->frame_x+x+lim-n-1, wnd->frame_y+y+i, fg_color);
+				}	
+			}
 		}
 	}
 }
@@ -809,8 +791,7 @@ int m_abs (int a) {
  *                      TEST PROCESS                     *
  *********************************************************/
 /* I'm declaring this in vga.h and calling it in kernel_main.
-This function is not necessary, I just wanted it in a place 
-thats easy to find for when I'm debugging/testing */
+This function is not necessary, just convenient for testing. */
 
 void vga_test (PROCESS proc, PARAM param)
 {
