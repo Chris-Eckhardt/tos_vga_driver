@@ -1,8 +1,33 @@
+/*
+  _______ ____   _____    __      _______            _____  _____  _______      ________ _____  
+ |__   __/ __ \ / ____|   \ \    / / ____|   /\     |  __ \|  __ \|_   _\ \    / /  ____|  __ \ 
+    | | | |  | | (___ _____\ \  / / |  __   /  \    | |  | | |__) | | |  \ \  / /| |__  | |__) |
+    | | | |  | |\___ \______\ \/ /| | |_ | / /\ \   | |  | |  _  /  | |   \ \/ / |  __| |  _  / 
+    | | | |__| |____) |      \  / | |__| |/ ____ \  | |__| | | \ \ _| |_   \  /  | |____| | \ \ 
+    |_|  \____/|_____/        \/   \_____/_/    \_\ |_____/|_|  \_\_____|   \/   |______|_|  \_\
+    
+    AUTHOR: Chris Eckhardt
+    DATE: 04/20/2020
+    CLASS: CSC-720.01, Professor Arno Pruder
+   
+    CREDITS: This file uses code from multiple authors.
+    See subroutine block comments for appropriate credit
+    and reference urls.
+    
+    NOTE: Extra-credit not implemented.
+ */
+
 #include <vga.h>
 
 /**************************************
 *                 8X8 FONT            *
 **************************************/
+/*
+	This ascii font rastor was found in a pdf on
+	tr-dos archives. For full reference, see the 
+	block comment for the write_regs function 
+	below.
+*/
 static unsigned char g_8x8_font[2048] =
 {
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -263,11 +288,14 @@ static unsigned char g_8x8_font[2048] =
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
+/* designated base vga memory address */
 #define VIDEO_BASE_ADDRESS  0xA0000
 
+/* screen dimentions (320x200, color 256) */
 #define SCREEN_WIDTH        320  
 #define SCREEN_HEIGHT       200
 
+/* values to be written to vga registers */
 #define VGA_AC_INDEX        0x3C0
 #define VGA_AC_WRITE        0x3C0
 #define VGA_AC_READ         0x3C1
@@ -284,6 +312,7 @@ static unsigned char g_8x8_font[2048] =
 #define VGA_CRTC_DATA       0x3D5
 #define VGA_INSTAT_READ     0x3DA
 
+/* used for indexing VGA REGISTERS*/
 #define VGA_NUM_SEQ_REGS    5
 #define VGA_NUM_CRTC_REGS   25
 #define VGA_NUM_GC_REGS     9
@@ -295,13 +324,14 @@ static unsigned char g_8x8_font[2048] =
 #define BLACK 				0x00
 #define WHITE 				0x3F
 
+/* constants used for window management */
 #define MAX_WINDOWS 		10
 #define NO_WINDOW 			-1
 #define IN_BOUNDS			1
 #define OUT_BOUNDS			0
 
+/* window management structures and IPC port */
 unsigned int g_window_id = 0;
-PORT vga_port;
 
 typedef struct {
 	const char * title;
@@ -317,6 +347,8 @@ typedef struct {
 } window;
 
 window windows[MAX_WINDOWS];
+
+PORT vga_port;
 
 /***************************************************************
  *                     Function Prototypes                     *
@@ -350,7 +382,7 @@ void 	draw_character 	( window * wnd, int x, int y, int bg_color, int fg_color, 
 
 int 	clip_check 		( window * wnd, int x, int y, int in_bounds );
 
-int		m_sgn 			( int x );
+int		m_sgn 			( int x ); // no longer used in this implementation
 
 int 	m_abs 			( int a );
 
@@ -358,6 +390,15 @@ int 	m_abs 			( int a );
 /***************************************************************
  *                          INIT VGA                           *
  ***************************************************************/
+/* 
+this is the initializer subroutine. It first writes to the VGA 
+registers to initialize graphics mode (in this case 320x200x256 VGA 
+mode). It then creates the graphics driver process and assigns the 
+IPC port to facilitate client process requests. The Screen is then 
+cleared (this is because when VGA mode is started, there is junk in 
+the screen's section of ram). An integer value of 1 is returned to 
+signal kernal_main that graphics mode has been enabled.
+*/
 
 int init_vga()
 {
@@ -398,6 +439,11 @@ int init_vga()
 /********************************************************************************
  *                              VGA DEVICE DRIVER                               *
  * *****************************************************************************/
+/*
+This is the actual VGA device driver process. This process is first created in init_vga().
+This process waits for IPC messages from client processes, processes the messages, and then 
+loops back to repeat this process.
+*/
 
 void vga_process (PROCESS proc, PARAM param)
 {
@@ -441,6 +487,15 @@ void vga_process (PROCESS proc, PARAM param)
 /**************************************************************
  *               WRITE TO THE VGA REGISTERS                   *
  *************************************************************/
+/*
+NOTE: This code is not my own. It was taken a pdf about VGA programming in 
+the TR-DOS archives (https://singlix.com/trdos/).
+
+AUTHOR: Origional Author not listed in PDF. I would like to give them 
+credit but have been unable to find a name.
+
+REFERENCE: https://www.singlix.com/trdos/archive/vga/Graphics%20in%20pmode.pdf
+*/
 
 void write_regs (unsigned char *regs)
 {
@@ -592,6 +647,16 @@ void draw_pixel (PARAM_VGA_DRAW_PIXEL * params)
 /*************************************************
  *                   DRAW LINE                   *
  * **********************************************/
+
+/*
+NOTE: This code was based on pseudo code from a tutorial at 
+freecodecamp.org. It is based on Bresenham’s algorithm
+for drawing lines.
+
+AUTHOR: goes by Javascript Teacher, actual name is unknown
+
+REFERENCE: https://www.freecodecamp.org/news/how-to-code-your-first-algorithm-draw-a-line-ca121f9a1395/
+*/
 
 void draw_line (PARAM_VGA_DRAW_LINE * params) 
 {
@@ -837,7 +902,7 @@ int m_abs (int a) {
  *                      TEST PROCESS                     *
  *********************************************************/
 /* I'm declaring this in vga.h and calling it in kernel_main.
-This function is not necessary, just convenient for testing. */
+This process is not necessary, just convenient for testing. */
 
 void vga_test (PROCESS proc, PARAM param)
 {
