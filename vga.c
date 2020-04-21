@@ -358,11 +358,11 @@ void    vga_process     ();
 
 void    create_window   ( PARAM_VGA_CREATE_WINDOW * params );
 
-void	draw_pixel		( PARAM_VGA_DRAW_PIXEL * params );
+void	draw_pixel      ( PARAM_VGA_DRAW_PIXEL * params );
 
-void	draw_text		( PARAM_VGA_DRAW_TEXT * params );
+void	draw_text       ( PARAM_VGA_DRAW_TEXT * params );
 
-void 	draw_line		( PARAM_VGA_DRAW_LINE * params );
+void 	draw_line       ( PARAM_VGA_DRAW_LINE * params );
 
 void    write_regs      ( unsigned char * regs );
 
@@ -372,19 +372,19 @@ void 	clear_screen 	();
 
 void 	fill_screen 	( int color);
 
-void 	fill_rect 		( int x, int y, int width, int height, int color );
+void 	fill_rect       ( int x, int y, int width, int height, int color );
 
-void 	set_pixel 		( int x, int y, int color );
+void 	set_pixel       ( int x, int y, int color );
 
 void 	draw_string 	( window * wnd, int x, int y, int bg_color, int fg_color, const char * str, int in_bounds );
 
 void 	draw_character 	( window * wnd, int x, int y, int bg_color, int fg_color, char c, int in_bounds );
 
-int 	clip_check 		( window * wnd, int x, int y, int in_bounds );
+int 	clip_check      ( window * wnd, int x, int y, int in_bounds );
 
-int		m_sgn 			( int x ); // no longer used in this implementation
+int	m_sgn           ( int x ); // no longer used in this implementation
 
-int 	m_abs 			( int a );
+int 	m_abs           ( int a );
 
 
 /***************************************************************
