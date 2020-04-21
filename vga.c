@@ -1,47 +1,8 @@
-
 #include <vga.h>
 
-/********************************************************************************
- *                           Globals and constants                              *
- * *****************************************************************************/
-
-#define YAASS_QUEEN         1
-#define VIDEO_BASE_ADDRESS  0xA0000
-
-#define SCREEN_WIDTH        320       /* width in pixels of mode 0x13 */
-#define SCREEN_HEIGHT       200       /* height in pixels of mode 0x13 */
-
-#define	VGA_AC_INDEX		0x3C0
-#define	VGA_AC_WRITE		0x3C0
-#define	VGA_AC_READ		    0x3C1
-#define	VGA_MISC_WRITE		0x3C2
-#define VGA_SEQ_INDEX		0x3C4
-#define VGA_SEQ_DATA		0x3C5
-#define	VGA_DAC_READ_INDEX	0x3C7
-#define	VGA_DAC_WRITE_INDEX	0x3C8
-#define	VGA_DAC_DATA		0x3C9
-#define	VGA_MISC_READ		0x3CC
-#define VGA_GC_INDEX 		0x3CE
-#define VGA_GC_DATA 		0x3CF
-/*			COLOR emulation		MONO emulation */
-#define VGA_CRTC_INDEX		0x3D4		/* 0x3B4 */
-#define VGA_CRTC_DATA		0x3D5		/* 0x3B5 */
-#define	VGA_INSTAT_READ		0x3DA
-
-#define	VGA_NUM_SEQ_REGS	5
-#define	VGA_NUM_CRTC_REGS	25
-#define	VGA_NUM_GC_REGS		9
-#define	VGA_NUM_AC_REGS		21
-#define	VGA_NUM_REGS		(1 + VGA_NUM_SEQ_REGS + VGA_NUM_CRTC_REGS + \
-				VGA_NUM_GC_REGS + VGA_NUM_AC_REGS)
-
-/* 256 color palette */
-#define BLACK 0x00
-#define WHITE 0x3F
-
-/*****************************************************************************
-*                               8X8 FONT                                     *
-*****************************************************************************/
+/**************************************
+*                 8X8 FONT            *
+**************************************/
 static unsigned char g_8x8_font[2048] =
 {
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -302,58 +263,326 @@ static unsigned char g_8x8_font[2048] =
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
-#define MAX_WINDOWS 10
+#define VIDEO_BASE_ADDRESS  0xA0000
+
+#define SCREEN_WIDTH        320  
+#define SCREEN_HEIGHT       200
+
+#define VGA_AC_INDEX        0x3C0
+#define VGA_AC_WRITE        0x3C0
+#define VGA_AC_READ         0x3C1
+#define VGA_MISC_WRITE      0x3C2
+#define VGA_SEQ_INDEX       0x3C4
+#define VGA_SEQ_DATA        0x3C5
+#define VGA_DAC_READ_INDEX  0x3C7
+#define VGA_DAC_WRITE_INDEX 0x3C8
+#define VGA_DAC_DATA        0x3C9
+#define VGA_MISC_READ       0x3CC
+#define VGA_GC_INDEX        0x3CE
+#define VGA_GC_DATA         0x3CF
+#define VGA_CRTC_INDEX      0x3D4       
+#define VGA_CRTC_DATA       0x3D5
+#define VGA_INSTAT_READ     0x3DA
+
+#define VGA_NUM_SEQ_REGS    5
+#define VGA_NUM_CRTC_REGS   25
+#define VGA_NUM_GC_REGS     9
+#define VGA_NUM_AC_REGS     21
+#define VGA_NUM_REGS        (1 + VGA_NUM_SEQ_REGS + VGA_NUM_CRTC_REGS + \
+                VGA_NUM_GC_REGS + VGA_NUM_AC_REGS)
+
+/* commonly used colors */
+#define BLACK 				0x00
+#define WHITE 				0x3F
+
+#define MAX_WINDOWS 		10
+#define NO_WINDOW 			-1
+#define IN_BOUNDS			1
+#define OUT_BOUNDS			0
 
 unsigned int g_window_id = 0;
 PORT vga_port;
 
 typedef struct {
-	int x;
-	int y;
-	int width;
-	int height;
-	int frame_x;
-	int frame_y;
-	int frame_width;
-	int frame_height;
-	unsigned int window_id;
+	const char * title;
+    int x;
+    int y;
+    int width;
+    int height;
+    int frame_x;
+    int frame_y;
+    int frame_width;
+    int frame_height;
+    unsigned int window_id;
 } window;
 
 window windows[MAX_WINDOWS];
 
-/****************************************************************
- *                Helper Function Prototypes                    *
+/***************************************************************
+ *                     Function Prototypes                     *
  ***************************************************************/
 
-void write_regs (unsigned char *regs);
-void clear_screen ();
-void fill_screen (int color);
-void fill_rect (int x, int y, int width, int height, int color);
-void draw_px (int x, int y, int color);
-int clip_check (int x, int y, window * wnd, int in_bounds);
-void draw_string (window * wnd, int x, int y, int bg_color, int fg_color, const char * str, int in_bounds);
-void draw_character (window * wnd, int x, int y, int bg_color, int fg_color, char c, int in_bounds);
-int m_sgn (int x);
-int m_abs (int a);
+void    vga_process     ();
 
-/****************************************************************
- *                   VGA API MESSAGE COMMANDS                   *
+void    create_window   ( PARAM_VGA_CREATE_WINDOW * params );
+
+void	draw_pixel		( PARAM_VGA_DRAW_PIXEL * params );
+
+void	draw_text		( PARAM_VGA_DRAW_TEXT * params );
+
+void 	draw_line		( PARAM_VGA_DRAW_LINE * params );
+
+void    write_regs      ( unsigned char * regs );
+
+void    draw_frame      ( window * wnd );
+
+void 	clear_screen 	();
+
+void 	fill_screen 	( int color);
+
+void 	fill_rect 		( int x, int y, int width, int height, int color );
+
+void 	set_pixel 		( int x, int y, int color );
+
+void 	draw_string 	( window * wnd, int x, int y, int bg_color, int fg_color, const char * str, int in_bounds );
+
+void 	draw_character 	( window * wnd, int x, int y, int bg_color, int fg_color, char c, int in_bounds );
+
+int 	clip_check 		( window * wnd, int x, int y, int in_bounds );
+
+int		m_sgn 			( int x );
+
+int 	m_abs 			( int a );
+
+
+/***************************************************************
+ *                          INIT VGA                           *
  ***************************************************************/
+
+int init_vga()
+{
+
+    unsigned char g_320x200x256[] =
+    {
+        /* MISC */
+        0x63,
+        /* SEQ */
+        0x03, 0x01, 0x0F, 0x00, 0x0E,
+        /* CRTC */
+        0x5F, 0x4F, 0x50, 0x82, 0x54, 0x80, 0xBF, 0x1F,
+        0x00, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x9C, 0x0E, 0x8F, 0x28, 0x40, 0x96, 0xB9, 0xA3,
+        0xFF,
+        /* GC */
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x05, 0x0F,
+        0xFF,
+        /* AC */
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+        0x41, 0x00, 0x0F, 0x00, 0x00
+    };
+
+    /* set to vga 256 color mode */
+    write_regs(g_320x200x256);
+
+    /* create vga driver process */
+    vga_port = create_process(vga_process, 7, 0, "VGA");
+
+    /* get rid of junk in memory */
+    clear_screen();
+
+    /* ret */
+    return 1;
+}
+
+/********************************************************************************
+ *                              VGA DEVICE DRIVER                               *
+ * *****************************************************************************/
+
+void vga_process (PROCESS proc, PARAM param)
+{
+
+    VGA_WINDOW_MSG * msg;
+    PROCESS sender;
+
+    /* wait for messages */
+    while (1)
+    {
+        
+        /* get message from sending process */
+        msg = (VGA_WINDOW_MSG *) receive(&sender);
+
+        /* process request from message */
+        switch (msg->cmd) 
+        {
+
+            case VGA_CREATE_WINDOW:
+                create_window( (PARAM_VGA_CREATE_WINDOW *) &msg->u.create_window );
+                break;
+
+            case VGA_DRAW_TEXT:
+                draw_text( (PARAM_VGA_DRAW_TEXT *) &msg->u.draw_text );
+                break;
+
+            case VGA_DRAW_PIXEL:
+                draw_pixel( (PARAM_VGA_DRAW_PIXEL *) &msg->u.draw_pixel );
+                break;
+
+            case VGA_DRAW_LINE:
+                draw_line( (PARAM_VGA_DRAW_LINE *) &msg->u.draw_line );
+                break;
+        }
+
+        /* reply to sender */
+        reply(sender);
+    }
+}
+
+/**************************************************************
+ *               WRITE TO THE VGA REGISTERS                   *
+ *************************************************************/
+
+void write_regs (unsigned char *regs)
+{
+    unsigned int i;
+
+    /* write MISCELLANEOUS reg */
+    outportb (VGA_MISC_WRITE, *(regs++));
+    
+    /* write SEQUENCER regs */
+    for (i = 0; i < VGA_NUM_SEQ_REGS; i++)
+    {
+        outportb (VGA_SEQ_INDEX, i);
+        outportb (VGA_SEQ_DATA, *(regs++));
+    }
+
+    /* unlock CRTC registers */
+    outportb (VGA_CRTC_INDEX, 0x03);
+    outportb (VGA_CRTC_DATA, inportb (VGA_CRTC_DATA) | 0x80);
+    outportb (VGA_CRTC_INDEX, 0x11);
+    outportb (VGA_CRTC_DATA, inportb (VGA_CRTC_DATA) & ~0x80);
+
+    /* make sure they remain unlocked */
+    regs[0x03] |= 0x80;
+    regs[0x11] &= ~0x80;
+
+    /* write CRTC regs */
+    for (i = 0; i < VGA_NUM_CRTC_REGS; i++)
+    {
+        outportb (VGA_CRTC_INDEX, i);
+        outportb (VGA_CRTC_DATA, *(regs++));
+    }
+
+    /* write GRAPHICS CONTROLLER regs */
+    for (i = 0; i < VGA_NUM_GC_REGS; i++)
+    {
+        outportb (VGA_GC_INDEX, i);
+        outportb (VGA_GC_DATA, *(regs++));
+    }
+
+    /* write ATTRIBUTE CONTROLLER regs */
+    for (i = 0; i < VGA_NUM_AC_REGS; i++)
+    {
+        (void) inportb (VGA_INSTAT_READ);
+        outportb (VGA_AC_INDEX, i);
+        outportb (VGA_AC_WRITE, *(regs++));
+    }
+
+    /* lock 16-color palette and unblank display */
+    (void) inportb (VGA_INSTAT_READ);
+    outportb (VGA_AC_INDEX, 0x20);
+}
+
+/***************************************************************
+ *                       Create Window                         *
+ ***************************************************************/
+
+void create_window ( PARAM_VGA_CREATE_WINDOW * params) 
+{
+    /* declare frame attributes */
+    int frame_x, frame_y, frame_w, frame_h;
+
+    /* calculate frame size */
+    frame_x = params->x-1;
+    frame_y = params->y-10;
+    frame_w = params->width+2;
+    frame_h = params->height+11;
+
+    /* check for frame clipping */
+    if(frame_x < 0)
+    {
+        if(frame_w + frame_x < 0)
+            return;
+
+        frame_w += frame_x;
+        frame_x = 0;
+    }
+    if(frame_x + frame_w >= SCREEN_WIDTH)
+    {
+        if(frame_x >= frame_w)
+            return;
+
+        frame_w = frame_w - frame_x;
+    }
+    if(frame_y < 0)
+    {
+        if(frame_h + frame_y < 0)
+            return;
+
+        frame_h += frame_y;
+        frame_y = 0;
+    }
+    if(frame_y + frame_h >= SCREEN_HEIGHT)
+    {
+        if(frame_y >= frame_h)
+            return;
+
+        frame_h = frame_h - frame_y;
+    }
+
+
+    /* Assign window id number */
+    if (g_window_id >= MAX_WINDOWS) {
+		/* NO MORE WINDOWS LEFT */
+        params->window_id = NO_WINDOW;
+        return;
+    }
+
+    params->window_id = g_window_id++;
+
+    /* add to window array */
+    window * new_window = &windows[params->window_id];
+	new_window->title = params->title;
+    new_window->x = params->x;
+    new_window->y = params->y;
+    new_window->width = params->width;
+    new_window->height = params->height;
+    new_window->frame_y = frame_y;
+    new_window->frame_x = frame_x;
+    new_window->frame_height = frame_h;
+    new_window->frame_width = frame_w;
+    new_window->window_id = params->window_id;
+
+	/* render the actual window */
+    draw_frame(new_window);
+
+}
 
 /*************************************************
  *                  DRAW PIXEL                   *
  * **********************************************/
 
-void draw_pixel (VGA_WINDOW_MSG * msg)
+void draw_pixel (PARAM_VGA_DRAW_PIXEL * params)
 {
-	PARAM_VGA_DRAW_PIXEL * params = &msg->u.draw_pixel;
 
-	assert(params->window_id < MAX_WINDOWS);
+	if (params->window_id == NO_WINDOW)
+		return;
+
 	window * wnd = &windows[params->window_id];
 
 	/* draw pixel */
-	if (clip_check(params->x, params->y, wnd, 1))
-		draw_px(
+	if (clip_check(wnd, params->x, params->y, 1))
+		set_pixel(
 			wnd->x + params->x, 
 			wnd->y + params->y, 
 			params->color
@@ -361,100 +590,15 @@ void draw_pixel (VGA_WINDOW_MSG * msg)
 }
 
 /*************************************************
- *                 CREATE WINDOW                 *
- * **********************************************/
-
-void create_window (VGA_WINDOW_MSG * msg)
-{
-	PARAM_VGA_CREATE_WINDOW * params = &msg->u.create_window;
-	int frame_x, frame_y, frame_w, frame_h;
-
-	/* calculate frame size */
-	frame_x = params->x-1;
-	frame_y = params->y-10;
-	frame_w = params->width+2;
-	frame_h = params->height+11;
-
-	/* check for clipping */
-	if(frame_x < 0)
-	{
-		if(frame_w + frame_x < 0)
-			return;
-
-		frame_w += frame_x;
-		frame_x = 0;
-	}
-	if(frame_x + frame_w >= SCREEN_WIDTH)
-	{
-		if(frame_x >= frame_w)
-			return;
-
-		frame_w = frame_w - frame_x;
-	}
-	if(frame_y < 0)
-	{
-		if(frame_h + frame_y < 0)
-			return;
-
-		frame_h += frame_y;
-		frame_y = 0;
-	}
-	if(frame_y + frame_h >= SCREEN_HEIGHT)
-	{
-		if(frame_y >= frame_h)
-			return;
-
-		frame_h = frame_h - frame_y;
-	}
-
-	assert(g_window_id < MAX_WINDOWS);
-	params->window_id = g_window_id++;
-
-	/* render window */
-	fill_rect(frame_x, frame_y, frame_w, frame_h, WHITE);
-	fill_rect(params->x, params->y, params->width, params->height, BLACK);
-
-	/* add to window array */
-	window * new_window = &windows[params->window_id];
-	new_window->x = params->x;
-	new_window->y = params->y;
-	new_window->width = params->width;
-	new_window->height = params->height;
-	new_window->frame_y = frame_y;
-	new_window->frame_x = frame_x;
-	new_window->frame_height = frame_h;
-	new_window->frame_width = frame_w;
-	new_window->window_id = params->window_id;
-
-	/* write title on frame */
-	draw_string(new_window, (frame_w/2)-((k_strlen(params->title)/2)*8), 2, WHITE, BLACK, params->title, 0);
-}
-
-/*************************************************
- *                   DRAW TEXT                   *
- * **********************************************/
-
-void draw_text (VGA_WINDOW_MSG * msg) 
-{
-	PARAM_VGA_DRAW_TEXT * params = &msg->u.draw_text;
-
-	assert(params->window_id < MAX_WINDOWS);
-	window * wnd = &windows[params->window_id];
-
-	/* print string */
-	draw_string(wnd, params->x, params->y, params->bg_color, params->fg_color, params->text, 1);
-}
-
-/*************************************************
  *                   DRAW LINE                   *
  * **********************************************/
 
-void draw_line (VGA_WINDOW_MSG * msg) 
+void draw_line (PARAM_VGA_DRAW_LINE * params) 
 {
 
-	PARAM_VGA_DRAW_LINE * params = &msg->u.draw_line;
+	if (params->window_id == NO_WINDOW)
+		return;
 
-	assert(params->window_id < MAX_WINDOWS);
 	window * wnd = &windows[params->window_id];
 
 	int x, y, dx, dy, dx1, dy1, px, py, xe, ye, i;
@@ -480,8 +624,8 @@ void draw_line (VGA_WINDOW_MSG * msg)
 			xe = params->x0;
 		}
 
-		if (clip_check(x, y, wnd, 1))
-			draw_px(wnd->x+x, wnd->y+y, params->color);
+		if (clip_check(wnd, x, y, 1))
+			set_pixel(wnd->x+x, wnd->y+y, params->color);
 
 		for (i = 0; x < xe; i++) {
 			x += 1;
@@ -497,8 +641,8 @@ void draw_line (VGA_WINDOW_MSG * msg)
 				px = px + 2 * (dy1 - dx1);
 			}
 
-			if (clip_check(x, y, wnd, 1))
-				draw_px(wnd->x+x, wnd->y+y, params->color);
+			if (clip_check(wnd, x, y, 1))
+				set_pixel(wnd->x+x, wnd->y+y, params->color);
 		}
 
 	} else {
@@ -513,8 +657,8 @@ void draw_line (VGA_WINDOW_MSG * msg)
 			ye = params->y0;
 		}
 
-		if (clip_check(x, y, wnd, 1))
-			draw_px(wnd->x+x, wnd->y+y, params->color);
+		if (clip_check(wnd, x, y, 1))
+			set_pixel(wnd->x+x, wnd->y+y, params->color);
 
 		for (i = 0; y < ye; i++) {
 			y += 1;
@@ -530,155 +674,41 @@ void draw_line (VGA_WINDOW_MSG * msg)
 				py = py + 2 * (dx1 - dy1);
 			}
 
-			if (clip_check(x, y, wnd, 1))
-				draw_px(wnd->x+x, wnd->y+y, params->color);
+			if (clip_check(wnd, x, y, 1))
+				set_pixel(wnd->x+x, wnd->y+y, params->color);
 		}
 
 	}
 }
 
-/********************************************************************************
- *                              VGA DEVICE DRIVER                               *
- * *****************************************************************************/
+/*************************************************
+ *                   DRAW TEXT                   *
+ * **********************************************/
 
-void vga_process (PROCESS proc, PARAM param)
+void draw_text (PARAM_VGA_DRAW_TEXT * params) 
 {
+	if (params->window_id == NO_WINDOW)
+		return;
 
-	VGA_WINDOW_MSG * msg;
-	PROCESS sender;
+	window * wnd = &windows[params->window_id];
 
-	/* wait for messages */
-	while (1)
-	{
-		
-		/* get message from sending process */
-		msg = (VGA_WINDOW_MSG *) receive(&sender);
-
-		/* process request from message */
-		switch (msg->cmd) 
-		{
-
-			case VGA_CREATE_WINDOW:
-				create_window(msg);
-				break;
-
-			case VGA_DRAW_TEXT:
-				draw_text(msg);
-				break;
-
-			case VGA_DRAW_PIXEL:
-				draw_pixel(msg);
-				break;
-
-			case VGA_DRAW_LINE:
-				draw_line(msg);
-				break;
-		}
-
-		/* reply to sender */
-		reply(sender);
-	}
+	/* print string */
+	draw_string(wnd, params->x, params->y, params->bg_color, params->fg_color, params->text, IN_BOUNDS);
 }
 
-/***************************************************************
- *                          INIT VGA                           *
- ***************************************************************/
-
-int init_vga()
-{
-    int implemented = YAASS_QUEEN;
-
-	unsigned char g_320x200x256[] =
-	{
-		/* MISC */
-		0x63,
-		/* SEQ */
-		0x03, 0x01, 0x0F, 0x00, 0x0E,
-		/* CRTC */
-		0x5F, 0x4F, 0x50, 0x82, 0x54, 0x80, 0xBF, 0x1F,
-		0x00, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x9C, 0x0E, 0x8F, 0x28, 0x40, 0x96, 0xB9, 0xA3,
-		0xFF,
-		/* GC */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x05, 0x0F,
-		0xFF,
-		/* AC */
-		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-		0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
-		0x41, 0x00, 0x0F, 0x00, 0x00
-	};
-
-	/* set to vga 256 color mode */
-    write_regs(g_320x200x256);
-
-	/* create vga driver process */
-    vga_port = create_process(vga_process, 7, 0, "VGA");
-
-	/* get rid of junk in memory */
-	clear_screen();
-
-	/* ret */
-    return implemented;
-}
-
-/**************************************************************
- *               WRITE TO THE VGA REGISTERS                   *
- *************************************************************/
-
-void write_regs (unsigned char *regs)
-{
-	unsigned int i;
-
-	/* write MISCELLANEOUS reg */
-	outportb (VGA_MISC_WRITE, *(regs++));
-	
-	/* write SEQUENCER regs */
-	for (i = 0; i < VGA_NUM_SEQ_REGS; i++)
-	{
-		outportb (VGA_SEQ_INDEX, i);
-		outportb (VGA_SEQ_DATA, *(regs++));
-	}
-
-	/* unlock CRTC registers */
-	outportb (VGA_CRTC_INDEX, 0x03);
-	outportb (VGA_CRTC_DATA, inportb (VGA_CRTC_DATA) | 0x80);
-	outportb (VGA_CRTC_INDEX, 0x11);
-	outportb (VGA_CRTC_DATA, inportb (VGA_CRTC_DATA) & ~0x80);
-
-	/* make sure they remain unlocked */
-	regs[0x03] |= 0x80;
-	regs[0x11] &= ~0x80;
-
-	/* write CRTC regs */
-	for (i = 0; i < VGA_NUM_CRTC_REGS; i++)
-	{
-		outportb (VGA_CRTC_INDEX, i);
-		outportb (VGA_CRTC_DATA, *(regs++));
-	}
-
-	/* write GRAPHICS CONTROLLER regs */
-	for (i = 0; i < VGA_NUM_GC_REGS; i++)
-	{
-		outportb (VGA_GC_INDEX, i);
-		outportb (VGA_GC_DATA, *(regs++));
-	}
-
-	/* write ATTRIBUTE CONTROLLER regs */
-	for (i = 0; i < VGA_NUM_AC_REGS; i++)
-	{
-		(void) inportb (VGA_INSTAT_READ);
-		outportb (VGA_AC_INDEX, i);
-		outportb (VGA_AC_WRITE, *(regs++));
-	}
-
-	/* lock 16-color palette and unblank display */
-	(void) inportb (VGA_INSTAT_READ);
-	outportb (VGA_AC_INDEX, 0x20);
-}
 
 /****************************************************************
  *                       HELPER FUNCTIONS                       *
  ***************************************************************/
+
+void draw_frame (window * wnd) 
+{
+	/* render window */
+	fill_rect(wnd->frame_x, wnd->frame_y, wnd->frame_width, wnd->frame_height, WHITE);
+	fill_rect(wnd->x, wnd->y, wnd->width, wnd->height, BLACK);
+	/* write title on frame */
+	draw_string( wnd, (wnd->frame_width/2)-((k_strlen(wnd->title)/2)*8), 2, WHITE, BLACK, wnd->title, OUT_BOUNDS);
+}
 
 void clear_screen () { fill_screen(0x00); }
 
@@ -687,7 +717,7 @@ void fill_screen (int color)
 	int x, y;
 	for (x = 0; x < SCREEN_WIDTH; x++)
     	for (y = 0; y < SCREEN_HEIGHT; y++)
-			draw_px(x, y, color);
+			set_pixel(x, y, color);
 }
 
 void fill_rect (int x, int y, int width, int height, int color)
@@ -695,15 +725,64 @@ void fill_rect (int x, int y, int width, int height, int color)
 	int x2, y2;
 	for(x2 = x; x2 < x + width; x2++)
 			for(y2 = y; y2 < y + height; y2++)
-				draw_px(x2, y2, color);
+				set_pixel(x2, y2, color);
 }
 
-void draw_px (int x, int y, int color) 
+void set_pixel (int x, int y, int color) 
 {
 	poke_b( (VIDEO_BASE_ADDRESS + y * SCREEN_WIDTH + x), color);
 }
 
-int clip_check (int x, int y, window * wnd, int in_bounds)
+void draw_string (window * wnd, int x, int y, int bg_color, int fg_color, const char * str, int in_bounds) {
+
+	while (*(str) != '\0') {
+		draw_character(wnd, x, y, bg_color, fg_color, *(str), in_bounds);
+		str++;
+		x+=8;
+	}
+}
+
+void draw_character (window * wnd, int x, int y, int bg_color, int fg_color, char c, int in_bounds) {
+
+	int i, n;
+	int lim = 8;
+	unsigned char b;
+
+	for (i = 0; i < lim; i++) {
+
+		b = g_8x8_font[(((int)c)*lim)+i];
+
+		for (n = 0; n < lim; n++) {
+
+			if (in_bounds) {
+
+				if ((b>>n&1) == 0) {
+					if (clip_check(wnd, x+lim-n-1, y+i, in_bounds))
+						set_pixel(wnd->x+x+lim-n-1, wnd->y+y+i, bg_color);
+				} else {
+					if (clip_check(wnd, x+lim-n-1, y+i, in_bounds))
+						set_pixel(wnd->x+x+lim-n-1, wnd->y+y+i, fg_color);
+				}
+
+			} else {
+
+				if ((b>>n&1) == 0) {
+					if (clip_check(wnd, x+lim-n-1, y+i, in_bounds))
+						set_pixel(wnd->frame_x+x+lim-n-1, wnd->frame_y+y+i, bg_color);
+				} else {
+					if (clip_check(wnd, x+lim-n-1, y+i, in_bounds))
+						set_pixel(wnd->frame_x+x+lim-n-1, wnd->frame_y+y+i, fg_color);
+				}	
+
+			}
+
+		}
+
+	}
+
+}
+
+int clip_check (window * wnd, int x, int y, int in_bounds)
 {
 	if (in_bounds) {
 		if (x < 0)
@@ -736,47 +815,6 @@ int clip_check (int x, int y, window * wnd, int in_bounds)
 	}
 }
 
-void draw_string (window * wnd, int x, int y, int bg_color, int fg_color, const char * str, int in_bounds) {
-
-	while (*(str) != '\0') {
-		draw_character(wnd, x, y, bg_color, fg_color, *(str), in_bounds);
-		str++;
-		x+=8;
-	}
-}
-
-void draw_character (window * wnd, int x, int y, int bg_color, int fg_color, char c, int in_bounds) {
-
-	int i, n;
-	int lim = 8;
-	unsigned char b;
-
-	for (i = 0; i < lim; i++) {
-
-		b = g_8x8_font[(((int)c)*lim)+i];
-
-		for (n = 0; n < lim; n++) {
-			if (in_bounds) {
-				if ((b>>n&1) == 0) {
-					if (clip_check(x+lim-n-1, y+i, wnd, in_bounds))
-					draw_px(wnd->x+x+lim-n-1, wnd->y+y+i, bg_color);
-				} else {
-					if (clip_check(x+lim-n-1, y+i, wnd, in_bounds))
-					draw_px(wnd->x+x+lim-n-1, wnd->y+y+i, fg_color);
-				}
-			} else {
-				if ((b>>n&1) == 0) {
-					if (clip_check(x+lim-n-1, y+i, wnd, in_bounds))
-					draw_px(wnd->frame_x+x+lim-n-1, wnd->frame_y+y+i, bg_color);
-				} else {
-					if (clip_check(x+lim-n-1, y+i, wnd, in_bounds))
-					draw_px(wnd->frame_x+x+lim-n-1, wnd->frame_y+y+i, fg_color);
-				}	
-			}
-		}
-	}
-}
-
 int m_sgn (int a) {
 	if (a < 0) return -1;
 	if (a > 0) return 1;
@@ -786,6 +824,14 @@ int m_sgn (int a) {
 int m_abs (int a) {
 	return a < 0 ? -a : a;
 }
+
+
+
+
+
+
+
+
 
 /*********************************************************
  *                      TEST PROCESS                     *
