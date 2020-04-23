@@ -288,6 +288,9 @@ static unsigned char g_8x8_font[2048] =
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
+/* FONT SIZE IS 8x8 */
+#define FONT_SIZE           8
+
 /* designated base vga memory address */
 #define VIDEO_BASE_ADDRESS  0xA0000
 
@@ -327,7 +330,9 @@ static unsigned char g_8x8_font[2048] =
 /* constants used for window management */
 #define MAX_WINDOWS 		10
 #define NO_WINDOW 			-1
-#define IN_BOUNDS			1
+
+#define CANVAS              2
+#define FRAME			    1
 #define OUT_BOUNDS			0
 
 /* window management structures and IPC port */
@@ -370,19 +375,15 @@ void    draw_frame      ( window * wnd );
 
 void 	clear_screen 	();
 
-void 	fill_screen 	( int color);
-
 void 	fill_rect       ( int x, int y, int width, int height, int color );
 
-void 	set_pixel       ( int x, int y, int color );
+void 	set_pixel       ( window * wnd, int x, int y, int color , int bounds);
 
 void 	draw_string 	( window * wnd, int x, int y, int bg_color, int fg_color, const char * str, int in_bounds );
 
 void 	draw_character 	( window * wnd, int x, int y, int bg_color, int fg_color, char c, int in_bounds );
 
-int 	clip_check      ( window * wnd, int x, int y, int in_bounds );
-
-int	m_sgn           ( int x ); // no longer used in this implementation
+int 	clip_check      ( int x, int y, int width, int height);
 
 int 	m_abs           ( int a );
 
@@ -490,10 +491,8 @@ void vga_process (PROCESS proc, PARAM param)
 /*
 NOTE: This code is not my own. It was taken a pdf about VGA programming in 
 the TR-DOS archives (https://singlix.com/trdos/).
-
 AUTHOR: Origional Author not listed in PDF. I would like to give them 
 credit but have been unable to find a name.
-
 REFERENCE: https://www.singlix.com/trdos/archive/vga/Graphics%20in%20pmode.pdf
 */
 
@@ -564,37 +563,22 @@ void create_window ( PARAM_VGA_CREATE_WINDOW * params)
     frame_h = params->height+11;
 
     /* check for frame clipping */
-    if(frame_x < 0)
-    {
-        if(frame_w + frame_x < 0)
-            return;
-
-        frame_w += frame_x;
+    if (frame_x < 0) {
         frame_x = 0;
+        params->x = 1;
     }
-    if(frame_x + frame_w >= SCREEN_WIDTH)
-    {
-        if(frame_x >= frame_w)
-            return;
-
-        frame_w = frame_w - frame_x;
-    }
-    if(frame_y < 0)
-    {
-        if(frame_h + frame_y < 0)
-            return;
-
-        frame_h += frame_y;
+    if (frame_y < 0) {
         frame_y = 0;
+        params->y = 10;
     }
-    if(frame_y + frame_h >= SCREEN_HEIGHT)
-    {
-        if(frame_y >= frame_h)
-            return;
-
-        frame_h = frame_h - frame_y;
+    if (frame_x+frame_w >= SCREEN_WIDTH) {
+        frame_x = SCREEN_WIDTH-frame_w;
+        params->x = SCREEN_WIDTH-frame_w+1;
     }
-
+    if (frame_y+frame_h >= SCREEN_HEIGHT) {
+        frame_y = SCREEN_HEIGHT-frame_h;
+        params->y = SCREEN_HEIGHT-frame_h+10;
+    }
 
     /* Assign window id number */
     if (g_window_id >= MAX_WINDOWS) {
@@ -636,12 +620,7 @@ void draw_pixel (PARAM_VGA_DRAW_PIXEL * params)
 	window * wnd = &windows[params->window_id];
 
 	/* draw pixel */
-	if (clip_check(wnd, params->x, params->y, 1))
-		set_pixel(
-			wnd->x + params->x, 
-			wnd->y + params->y, 
-			params->color
-			);
+	set_pixel(wnd, params->x, params->y, params->color, CANVAS);
 }
 
 /*************************************************
@@ -652,9 +631,7 @@ void draw_pixel (PARAM_VGA_DRAW_PIXEL * params)
 NOTE: This code was based on pseudo code from a tutorial at 
 freecodecamp.org. It is based on Bresenham’s algorithm
 for drawing lines.
-
 AUTHOR: goes by Javascript Teacher, actual name is unknown
-
 REFERENCE: https://www.freecodecamp.org/news/how-to-code-your-first-algorithm-draw-a-line-ca121f9a1395/
 */
 
@@ -689,8 +666,7 @@ void draw_line (PARAM_VGA_DRAW_LINE * params)
 			xe = params->x0;
 		}
 
-		if (clip_check(wnd, x, y, 1))
-			set_pixel(wnd->x+x, wnd->y+y, params->color);
+		set_pixel(wnd, x, y, params->color, CANVAS);
 
 		for (i = 0; x < xe; i++) {
 			x += 1;
@@ -706,8 +682,7 @@ void draw_line (PARAM_VGA_DRAW_LINE * params)
 				px = px + 2 * (dy1 - dx1);
 			}
 
-			if (clip_check(wnd, x, y, 1))
-				set_pixel(wnd->x+x, wnd->y+y, params->color);
+			set_pixel(wnd, x, y, params->color, CANVAS);
 		}
 
 	} else {
@@ -722,8 +697,7 @@ void draw_line (PARAM_VGA_DRAW_LINE * params)
 			ye = params->y0;
 		}
 
-		if (clip_check(wnd, x, y, 1))
-			set_pixel(wnd->x+x, wnd->y+y, params->color);
+		set_pixel(wnd, x, y, params->color, CANVAS);
 
 		for (i = 0; y < ye; i++) {
 			y += 1;
@@ -739,8 +713,7 @@ void draw_line (PARAM_VGA_DRAW_LINE * params)
 				py = py + 2 * (dx1 - dy1);
 			}
 
-			if (clip_check(wnd, x, y, 1))
-				set_pixel(wnd->x+x, wnd->y+y, params->color);
+            set_pixel(wnd, x, y, params->color, CANVAS);
 		}
 
 	}
@@ -758,7 +731,7 @@ void draw_text (PARAM_VGA_DRAW_TEXT * params)
 	window * wnd = &windows[params->window_id];
 
 	/* print string */
-	draw_string(wnd, params->x, params->y, params->bg_color, params->fg_color, params->text, IN_BOUNDS);
+	draw_string(wnd, params->x, params->y, params->bg_color, params->fg_color, params->text, CANVAS);
 }
 
 
@@ -772,118 +745,91 @@ void draw_frame (window * wnd)
 	fill_rect(wnd->frame_x, wnd->frame_y, wnd->frame_width, wnd->frame_height, WHITE);
 	fill_rect(wnd->x, wnd->y, wnd->width, wnd->height, BLACK);
 	/* write title on frame */
-	draw_string( wnd, (wnd->frame_width/2)-((k_strlen(wnd->title)/2)*8), 2, WHITE, BLACK, wnd->title, OUT_BOUNDS);
+	draw_string( wnd, (wnd->frame_width/2)-((k_strlen(wnd->title)/2)*8), 2, WHITE, BLACK, wnd->title, FRAME);
 }
 
-void clear_screen () { fill_screen(0x00); }
-
-void fill_screen (int color) 
-{
-	int x, y;
-	for (x = 0; x < SCREEN_WIDTH; x++)
-    	for (y = 0; y < SCREEN_HEIGHT; y++)
-			set_pixel(x, y, color);
-}
+void clear_screen () { fill_rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, BLACK); }
 
 void fill_rect (int x, int y, int width, int height, int color)
 {
 	int x2, y2;
 	for(x2 = x; x2 < x + width; x2++)
 			for(y2 = y; y2 < y + height; y2++)
-				set_pixel(x2, y2, color);
+				poke_pixel(x2, y2, color);
 }
 
-void set_pixel (int x, int y, int color) 
+void set_pixel (window * wnd, int x, int y, int color, int bounds) 
+{
+    switch (bounds)
+	{
+		case CANVAS:
+		    if (clip_check (x, y, wnd->width, wnd->height))
+            		poke_pixel (wnd->x+x, wnd->y+y, color);
+		break;
+
+		case FRAME:
+			if (clip_check (x, y, wnd->frame_width, wnd->frame_height))
+            			poke_pixel (wnd->frame_x+x, wnd->frame_y+y, color);
+			break;
+
+		case OUT_BOUNDS:
+			if (clip_check (x, y, SCREEN_WIDTH, SCREEN_HEIGHT))
+				poke_pixel (x, y, color);  
+			break;
+	}
+}
+
+void poke_pixel (int x, int y, int color) 
 {
 	poke_b( (VIDEO_BASE_ADDRESS + y * SCREEN_WIDTH + x), color);
 }
 
-void draw_string (window * wnd, int x, int y, int bg_color, int fg_color, const char * str, int in_bounds) {
+void draw_string (window * wnd, int x, int y, int bg_color, int fg_color, const char * str, int bounds) {
 
 	while (*(str) != '\0') {
-		draw_character(wnd, x, y, bg_color, fg_color, *(str), in_bounds);
+		draw_character(wnd, x, y, bg_color, fg_color, *(str), bounds);
 		str++;
 		x+=8;
 	}
 }
 
-void draw_character (window * wnd, int x, int y, int bg_color, int fg_color, char c, int in_bounds) {
+void draw_character (window * wnd, int x, int y, int bg_color, int fg_color, char c, int bounds) {
 
 	int i, n;
-	int lim = 8;
 	unsigned char b;
 
-	for (i = 0; i < lim; i++) {
+	for (i = 0; i < FONT_SIZE; i++) {
 
-		b = g_8x8_font[(((int)c)*lim)+i];
+		b = g_8x8_font[(((int)c)*FONT_SIZE)+i];
 
-		for (n = 0; n < lim; n++) {
+		for (n = 0; n < FONT_SIZE; n++) {
 
-			if (in_bounds) {
-
-				if ((b>>n&1) == 0) {
-					if (clip_check(wnd, x+lim-n-1, y+i, in_bounds))
-						set_pixel(wnd->x+x+lim-n-1, wnd->y+y+i, bg_color);
-				} else {
-					if (clip_check(wnd, x+lim-n-1, y+i, in_bounds))
-						set_pixel(wnd->x+x+lim-n-1, wnd->y+y+i, fg_color);
-				}
-
+			if ((b>>n&1)) {
+				set_pixel(wnd, x+FONT_SIZE-n-1, y+i, fg_color, bounds);
 			} else {
-
-				if ((b>>n&1) == 0) {
-					if (clip_check(wnd, x+lim-n-1, y+i, in_bounds))
-						set_pixel(wnd->frame_x+x+lim-n-1, wnd->frame_y+y+i, bg_color);
-				} else {
-					if (clip_check(wnd, x+lim-n-1, y+i, in_bounds))
-						set_pixel(wnd->frame_x+x+lim-n-1, wnd->frame_y+y+i, fg_color);
-				}	
-
+				set_pixel(wnd, x+FONT_SIZE-n-1, y+i, bg_color, bounds);
 			}
-
 		}
-
 	}
-
 }
 
-int clip_check (window * wnd, int x, int y, int in_bounds)
+int clip_check (int x, int y, int width, int height)
 {
-	if (in_bounds) {
-		if (x < 0)
-			return 0;
 
-		if (x >= wnd->width)
-			return 0;
+	if (x < 0)
+		return 0;
 
-		if (y < 0)
-			return 0;
+	if (x >= width)
+		return 0;
 
-		if (y >= wnd->height)
-			return 0;
+	if (y < 0)
+		return 0;
 
-		return 1;
-	} else {
-		if (x < 0)
-			return 0;
+	if (y >= height)
+		return 0;
 
-		if (x >= wnd->frame_width)
-			return 0;
+	return 1;
 
-		if (y < 0)
-			return 0;
-
-		if (y >= wnd->frame_height)
-			return 0;
-
-		return 1;
-	}
-}
-
-int m_sgn (int a) {
-	if (a < 0) return -1;
-	if (a > 0) return 1;
-	return 0;
 }
 
 int m_abs (int a) {
@@ -906,7 +852,7 @@ This process is not necessary, just convenient for testing. */
 
 void vga_test (PROCESS proc, PARAM param)
 {
-  	VGA_WINDOW_MSG msg;
+	VGA_WINDOW_MSG msg;
 
 	// Create Window 1
 	msg.cmd = VGA_CREATE_WINDOW;
@@ -944,9 +890,9 @@ void vga_test (PROCESS proc, PARAM param)
 		msg.cmd = VGA_DRAW_LINE;
 		msg.u.draw_line.window_id = window1_id;
 		msg.u.draw_line.x0 = x;
-		msg.u.draw_line.y0 = 0; // 0
+		msg.u.draw_line.y0 = 0;
 		msg.u.draw_line.x1 = 100 - x;
-		msg.u.draw_line.y1 = 49; // 49
+		msg.u.draw_line.y1 = 49;
 		msg.u.draw_line.color = current_color++;
 		send(vga_port, &msg);
 	}
@@ -977,11 +923,11 @@ void vga_test (PROCESS proc, PARAM param)
 	current_color = 0;
 	for (int x = 3; x < 100; x += 5) {
 		for (int y = 3; y < 100; y += 5) {
-			msg.u.draw_pixel.x = x;
-			msg.u.draw_pixel.y = y;
-			msg.u.draw_pixel.color = current_color;
-			current_color = (current_color + 1) % 64;
-			send(vga_port, &msg);
+		msg.u.draw_pixel.x = x;
+		msg.u.draw_pixel.y = y;
+		msg.u.draw_pixel.color = current_color;
+		current_color = (current_color + 1) % 64;
+		send(vga_port, &msg);
 		}
 	}
 }
