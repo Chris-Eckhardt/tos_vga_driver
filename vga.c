@@ -14,7 +14,9 @@
     See subroutine block comments for appropriate credit
     and reference urls.
     
-    NOTE: Extra-credit not implemented.
+    NOTE: Extra-credit not implemented. A maximum of 10 windows can be created.
+	After 10 windows, the IPC messages for new windows will be received but ignored.
+	The first 10 windows will still be able to receive and process IPC message commands.
  ***********************************************************************************************/
 
 #include <vga.h>
