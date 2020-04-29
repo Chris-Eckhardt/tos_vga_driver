@@ -29,7 +29,7 @@
 	of vga.c without the compiler screaming at me. So, it will have to live here.
 
 	This array was found in the following PDF, this is the same source where I found 
-	the code to white to the VGA registers.
+	the code to write to the VGA registers.
 
 	REFERENCE: https://www.singlix.com/trdos/archive/vga/Graphics%20in%20pmode.pdf
 */
