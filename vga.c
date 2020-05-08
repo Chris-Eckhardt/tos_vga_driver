@@ -8,7 +8,7 @@
     
     AUTHOR: Chris Eckhardt
     DATE: 04/20/2020
-    CLASS: CSC-720.01, Professor Arno Pruder
+    CLASS: CSC-720.01, Professor Arno Puder
    
     CREDITS: This file uses code from multiple authors.
     See subroutine block comments for appropriate credit
